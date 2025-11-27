@@ -1,0 +1,98 @@
+# .NET build artifacts
+bin/
+obj/
+out/
+
+# User-specific files
+*.user
+*.userosscache
+*.suo
+*.userprefs
+
+# Visual Studio settings
+.vs/
+.idea/
+*.DotSettings.user
+
+# Build results
+[Bb]uild/
+[Ll]og/
+[Dd]ebug/
+[Rr]elease/
+x64/
+x86/
+[Aa][Rr][Mm]/
+[Aa][Rr][Mm]64/
+*.pidb
+*.svclog
+TestResults/
+*.VisualState.xml
+*.nunit.xml
+
+# NuGet
+*.nupkg
+*.snupkg
+*.nuspec
+project.lock.json
+packages/
+.nuget/
+*.nuget.props
+*.nuget.targets
+
+# Rider / ReSharper
+_ReSharper*/
+*.[Rr]e[Ss]harper
+*.DotSettings
+
+# Temporary files
+*.tmp
+*.bak
+*.log
+*.tlog
+*.cache
+*.config.old
+*.orig
+*.rej
+
+# Windows Service installer logs (if using sc.exe or PowerShell)
+*.InstallLog
+*.UninstallLog
+
+# Publish outputs
+publish/
+[Pp]ublished/
+*.Publish.xml
+
+# Configuration secrets (if any)
+appsettings.*.local.json
+appsettings.Local.json
+secrets.json
+
+# Environment variables
+.env
+.env.*
+
+# JetBrains Rider
+.idea/
+
+# VS Code
+.vscode/
+
+# macOS / Windows junk
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Git merge conflicts
+*.orig
+
+# Coverage / Analysis
+coverage/
+*.coverage
+*.coveragexml
+.vscoverage
+TestResult.xml
+
+# Dotnet tools
+.tools/
+dotnet-tools.json
