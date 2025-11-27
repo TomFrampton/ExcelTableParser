@@ -7,7 +7,7 @@ namespace ExcelTableParser.Console
     {
         static void Main(string[] args)
         {
-            using var fileStream = File.OpenRead("D:\\Projects\\ExcelTableParser\\ExcelTableParser\\ExcelTableParser.Console\\NDS Modifiers.xlsm");
+            using var fileStream = File.OpenRead("D:\\Projects\\ExcelTableParser\\ExcelTableParser.Console\\NDS Modifiers.xlsm");
 
             var modifier = ExcelTableParser.ParseTable<Modifier>(
                 fileStream,

@@ -39,18 +39,18 @@ namespace ExcelTableParser.Console
 
     public class ExcelTableError
     {
-        public int RowNumber { get; set; }
-        public string ColumnName { get; set; }
-        public string PropertyName { get; set; }
-        public string RawValue { get; set; }
-        public string Message { get; set; }
+        public int? RowNumber { get; set; }
+        public string? ColumnName { get; set; }
+        public string? PropertyName { get; set; }
+        public string? RawValue { get; set; }
+        public string? Message { get; set; }
     }
 
     // -------------------------------------------------
     // Main Parser
     // -------------------------------------------------
 
-public static class ExcelTableParser
+    public static class ExcelTableParser
     {
         public static ExcelTableResult<T> ParseTable<T>(
             Stream excelStream,
@@ -67,15 +67,35 @@ public static class ExcelTableParser
 
             // --------------------- Locate Sheet ---------------------
             var sheet = wbPart.Workbook.Descendants<Sheet>()
-                        .FirstOrDefault(s => s.Name == sheetName)
-                        ?? throw new Exception($"Sheet '{sheetName}' not found.");
+                        .FirstOrDefault(s => s.Name == sheetName);
+
+            if (sheet == null)
+            {
+                result.Errors.Add(new ExcelTableError
+                {
+                    Message = $"Sheet '{sheetName}' was not found in the Excel document."
+                });
+
+                return result;
+            }
 
             var wsPart = (WorksheetPart)wbPart.GetPartById(sheet.Id);
 
             // --------------------- Locate Table ---------------------
             var tablePart = wsPart.TableDefinitionParts
-                .FirstOrDefault(tp => tableName == null || tp.Table.DisplayName == tableName)
-                ?? throw new Exception($"Table '{tableName}' not found.");
+                .FirstOrDefault(tp => tableName == null || tp.Table.DisplayName == tableName);
+
+            if (tablePart == null)
+            {
+                result.Errors.Add(new ExcelTableError
+                {
+                    Message = tableName == null
+                        ? $"No table was found in the sheet '{sheetName}'."
+                        : $"Table '{tableName}' was not found in sheet '{sheetName}'."
+                });
+
+                return result;
+            }
 
             var table = tablePart.Table;
             string range = table.Reference;
