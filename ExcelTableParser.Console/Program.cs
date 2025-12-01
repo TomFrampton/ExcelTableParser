@@ -23,8 +23,7 @@ namespace ExcelTableParser.Console
                 fileStream,
                 "Modifier Set Member",
                 "t_modifier_set_member",
-                null,
-                (modifierSetMember, rowNumber) => !modifierSetResult.Items.Any(x => x.ModifierSetName == modifierSetMember.ModifierSetName)
+                customValidator: (modifierSetMember, rowNumber) => !modifierSetResult.ValidRows.Any(x => x.Item.ModifierSetName == modifierSetMember.ModifierSetName)
                     ? [$"Modifier set '{modifierSetMember.ModifierSetName}' not found."]
                     : []
                 );
@@ -38,8 +37,7 @@ namespace ExcelTableParser.Console
                 fileStream,
                 "Scenario Set Member",
                 "t_scenario_set_member",
-                null,
-                (scenarioSetMember, rowNumber) => !scenarioSetResult.Items.Any(x => x.ScenarioSetName == scenarioSetMember.ScenarioSetName)
+                customValidator: (scenarioSetMember, rowNumber) => !scenarioSetResult.ValidRows.Any(x => x.Item.ScenarioSetName == scenarioSetMember.ScenarioSetName)
                     ? [$"Scenario set '{scenarioSetMember.ScenarioSetName}' not found."]
                     : []
                 );

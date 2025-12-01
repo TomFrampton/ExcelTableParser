@@ -31,12 +31,6 @@ namespace ExcelTableParser.Console
     // Error + Result Models
     // -------------------------------------------------
 
-    public class ExcelTableResult<T>
-    {
-        public List<T> Items { get; set; } = new();
-        public List<ExcelTableError> Errors { get; set; } = new();
-    }
-
     public class ExcelTableError
     {
         public int? RowNumber { get; set; }
@@ -44,6 +38,22 @@ namespace ExcelTableParser.Console
         public string? PropertyName { get; set; }
         public string? RawValue { get; set; }
         public string? Message { get; set; }
+    }
+
+    public class ExcelTableResult<T>
+    {
+        public List<ExcelParsedRow<T>> Rows { get; set; } = new();
+        public List<ExcelTableError> Errors { get; set; } = new();
+
+        public List<ExcelParsedRow<T>> ValidRows => Rows.Where(r => r.IsValid).ToList();
+        public List<ExcelParsedRow<T>> InvalidRows => Rows.Where(r => !r.IsValid).ToList();
+    }
+
+    public class ExcelParsedRow<T>
+    {
+        public int RowNumber { get; set; }
+        public T Item { get; set; }
+        public bool IsValid { get; set; }
     }
 
     // -------------------------------------------------
@@ -56,7 +66,6 @@ namespace ExcelTableParser.Console
             Stream excelStream,
             string sheetName,
             string tableName = null,
-            IServiceProvider serviceProvider = null,
             Func<T, int, IEnumerable<string>> customValidator = null)
             where T : new()
         {
@@ -65,7 +74,7 @@ namespace ExcelTableParser.Console
             using var doc = SpreadsheetDocument.Open(excelStream, false);
             var wbPart = doc.WorkbookPart;
 
-            // --------------------- Locate Sheet ---------------------
+            // --------------------- Locate the sheet ---------------------
             var sheet = wbPart.Workbook.Descendants<Sheet>()
                         .FirstOrDefault(s => s.Name == sheetName);
 
@@ -73,6 +82,7 @@ namespace ExcelTableParser.Console
             {
                 result.Errors.Add(new ExcelTableError
                 {
+                    RowNumber = null,
                     Message = $"Sheet '{sheetName}' was not found in the Excel document."
                 });
 
@@ -81,7 +91,7 @@ namespace ExcelTableParser.Console
 
             var wsPart = (WorksheetPart)wbPart.GetPartById(sheet.Id);
 
-            // --------------------- Locate Table ---------------------
+            // --------------------- Locate the table ---------------------
             var tablePart = wsPart.TableDefinitionParts
                 .FirstOrDefault(tp => tableName == null || tp.Table.DisplayName == tableName);
 
@@ -89,8 +99,9 @@ namespace ExcelTableParser.Console
             {
                 result.Errors.Add(new ExcelTableError
                 {
+                    RowNumber = null,
                     Message = tableName == null
-                        ? $"No table was found in the sheet '{sheetName}'."
+                        ? $"No table was found in sheet '{sheetName}'."
                         : $"Table '{tableName}' was not found in sheet '{sheetName}'."
                 });
 
@@ -104,7 +115,7 @@ namespace ExcelTableParser.Console
 
             var sheetData = wsPart.Worksheet.GetFirstChild<SheetData>();
 
-            // --------------------- Read Headers ---------------------
+            // --------------------- Read headers ---------------------
             Row headerRow = sheetData.Elements<Row>()
                                      .First(r => r.RowIndex == (uint)rowStart);
 
@@ -116,7 +127,7 @@ namespace ExcelTableParser.Console
                 headers.Add(ReadCellValue(wbPart, cell).Trim());
             }
 
-            // --------------------- Attribute-Based Column Mapping ---------------------
+            // --------------------- Build column mapping ---------------------
             var props = typeof(T).GetProperties();
             var columnMap = new Dictionary<string, PropertyInfo>(StringComparer.OrdinalIgnoreCase);
 
@@ -135,13 +146,14 @@ namespace ExcelTableParser.Console
                     columnToProp[i] = prop;
             }
 
-            // --------------------- Parse Data Rows ---------------------
+            // --------------------- Parse data rows ---------------------
             for (int r = rowStart + 1; r <= rowEnd; r++)
             {
                 Row row = sheetData.Elements<Row>().FirstOrDefault(x => x.RowIndex == (uint)r);
                 if (row == null) continue;
 
                 T obj = new();
+                bool isValid = true;
 
                 for (int c = colStart; c <= colEnd; c++)
                 {
@@ -150,7 +162,6 @@ namespace ExcelTableParser.Console
                     if (prop == null) continue;
 
                     string columnHeader = headers[idx];
-
                     string cellRef = GetColName(c) + r;
                     Cell cell = row.Elements<Cell>().FirstOrDefault(x => x.CellReference == cellRef);
                     string rawValue = ReadCellValue(wbPart, cell);
@@ -167,6 +178,8 @@ namespace ExcelTableParser.Console
                             RawValue = rawValue,
                             Message = error
                         });
+
+                        isValid = false;
                         continue;
                     }
 
@@ -174,7 +187,7 @@ namespace ExcelTableParser.Console
                 }
 
                 // --------------------- DataAnnotations + IValidatableObject ---------------------
-                foreach (var ve in RunValidation(obj, serviceProvider))
+                foreach (var ve in RunValidation(obj))
                 {
                     result.Errors.Add(new ExcelTableError
                     {
@@ -182,9 +195,11 @@ namespace ExcelTableParser.Console
                         PropertyName = ve.MemberNames.FirstOrDefault() ?? "",
                         Message = ve.ErrorMessage
                     });
+
+                    isValid = false;
                 }
 
-                // --------------------- Custom Row Validator ---------------------
+                // --------------------- Custom validator ---------------------
                 if (customValidator != null)
                 {
                     foreach (var msg in customValidator(obj, r))
@@ -194,25 +209,32 @@ namespace ExcelTableParser.Console
                             RowNumber = r,
                             Message = msg
                         });
+
+                        isValid = false;
                     }
                 }
 
-                result.Items.Add(obj);
+                // --------------------- Add parsed row ---------------------
+                result.Rows.Add(new ExcelParsedRow<T>
+                {
+                    RowNumber = r,
+                    Item = obj,
+                    IsValid = isValid
+                });
             }
 
             return result;
         }
 
-        // --------------------------- Validation ---------------------------
-        private static List<ValidationResult> RunValidation(object obj, IServiceProvider provider)
+        // --------------------------- Helpers ---------------------------
+        private static List<ValidationResult> RunValidation(object obj)
         {
-            var ctx = new ValidationContext(obj, provider, null);
+            var ctx = new ValidationContext(obj);
             var results = new List<ValidationResult>();
             Validator.TryValidateObject(obj, ctx, results, validateAllProperties: true);
             return results;
         }
 
-        // --------------------------- Conversion ---------------------------
         private static object ConvertSafe(string value, Type targetType, out string error)
         {
             error = null;
@@ -236,7 +258,6 @@ namespace ExcelTableParser.Console
             }
         }
 
-        // --------------------------- Range Helpers ---------------------------
         private static void ParseRange(string range, out int colStart, out int colEnd, out int rowStart, out int rowEnd)
         {
             var p = range.Split(':');
@@ -275,6 +296,7 @@ namespace ExcelTableParser.Console
         private static string ReadCellValue(WorkbookPart wbPart, Cell cell)
         {
             if (cell == null) return "";
+
             string value = cell.InnerText;
 
             if (cell.DataType?.Value == CellValues.SharedString)
