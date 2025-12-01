@@ -150,21 +150,42 @@ namespace ExcelTableParser.Console
             for (int r = rowStart + 1; r <= rowEnd; r++)
             {
                 Row row = sheetData.Elements<Row>().FirstOrDefault(x => x.RowIndex == (uint)r);
-                if (row == null) continue;
 
-                T obj = new();
-                bool isValid = true;
+                // If the row node is missing entirely, treat as empty row and skip
+                if (row == null)
+                    continue;
+
+                // --- First pass: read all raw values for emptiness detection ---
+                var rawValues = new List<string>(headers.Count);
 
                 for (int c = colStart; c <= colEnd; c++)
                 {
-                    int idx = c - colStart;
-                    var prop = columnToProp[idx];
-                    if (prop == null) continue;
-
-                    string columnHeader = headers[idx];
                     string cellRef = GetColName(c) + r;
                     Cell cell = row.Elements<Cell>().FirstOrDefault(x => x.CellReference == cellRef);
-                    string rawValue = ReadCellValue(wbPart, cell);
+                    string raw = ReadCellValue(wbPart, cell);
+                    rawValues.Add(raw);
+                }
+
+                bool allValuesEmpty = rawValues.All(v => string.IsNullOrWhiteSpace(v));
+
+                if (allValuesEmpty)
+                {
+                    // This is just an empty row (all cells blank) – ignore it completely.
+                    continue;
+                }
+
+                // --- Now we know it's a "real" row; parse into T ---
+                T obj = new();
+                bool isValid = true;
+
+                for (int idx = 0; idx < headers.Count; idx++)
+                {
+                    var prop = columnToProp[idx];
+                    if (prop == null)
+                        continue; // column not mapped to a property
+
+                    string columnHeader = headers[idx];
+                    string rawValue = rawValues[idx];
 
                     object converted = ConvertSafe(rawValue, prop.PropertyType, out string error);
 
@@ -227,6 +248,7 @@ namespace ExcelTableParser.Console
         }
 
         // --------------------------- Helpers ---------------------------
+
         private static List<ValidationResult> RunValidation(object obj)
         {
             var ctx = new ValidationContext(obj);
